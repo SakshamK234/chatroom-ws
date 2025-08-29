@@ -5,6 +5,7 @@ const server = new ws.WebSocketServer({port: 3000})
 //broadcasts messages to every user
 function broadcast(obj)
 {
+    data = JSON.stringify(obj);
     for (const client of server.clients)
     {
         if(client.readyState == WebSocket.OPEN)
@@ -25,14 +26,16 @@ function userList()
             ulist.push({id: client.id, name: client.name});
         }
     }
+    return ulist;
 }
 
 //Generated a random name if the user doesn't pick one. The current list is 4 dogs I know
 function randName()
 {
     const choices = ["Leo", "Oscar", "Josie", "Max"]
-    const pick = choices[Math.floor(Math.random() * animals.length)];
-    return '${pick}';
+    const pick = choices[Math.floor(Math.random() * choices.length)];
+    const tag = Math.random().toString(36).slice(2, 6).toUpperCase();
+    return `${pick}-${tag}`;
 }
 
 
@@ -43,38 +46,37 @@ server.on("connection", (ws) => {
     ws.id = String(currId);
     currId++;
     ws.joined = false;
-    ws.name = null;
+    ws.name = randName();
+
+    broadcast({type: "system", text: `${ws.name} has joined`});
+    broadcast({type: "users", users: userList()});
 
     ws.on("message", (data) => {
-        let msg;
-        msg = JSON.parse(data.toString());
+        const text = data.toString();
 
-        const type = msg?.type;
-
-        if(!ws.joined)
+        if(text.startsWith("/name "))
         {
-            const reqName = msg.text.trim();
-            ws.name = requestedName || randName();
-            ws.joined = true;
-
-            broadcast({type: "system", text: "${ws.name} has joined"});
-            broadcast({type: "users", users: userList()});
+            const newName = text.slice(6).trim();
+            if(newName)
+            {
+                const old = ws.name;
+                ws.name = newName;
+                broadcast({type: "system", text: `${old} is now ${ws.name}`});
+                broadcast({type: "users", users: userList()});
+            } 
             return;
         }
 
-        if(type == "message")
-        {
-            const text = msg.text.trim();
-            broadcast({type: "message", from: {id:ws.id, name: ws.name}, text});
-            return;
-        }
-    })
+        broadcast({type: "message", from: {id: ws.id, name: ws.name}, text: text.trim()});
+    });
 
     ws.on("close", () => {
         if(ws.joined)
         {
-            broadcast({type: "system", text: "${ws.name} has left"});
+            broadcast({type: "system", text: `${ws.name} has left`});
             broadcast({type: "users", users: userList()});
         }
-    })
-})
+    });
+});
+
+console.log('Server is running')
