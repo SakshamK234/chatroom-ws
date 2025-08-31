@@ -52,7 +52,99 @@ export default function App()
     return `${WS_URL}${n ? `${sep}name=${n}` : ""}`;
   }, [name]);
 
+  const scheduleReconnect = useCallback(() => {
+    reconnectAttempts.current = Math.min(reconnectAttempts.current + 1, 6);
+    const delay = Math.min(500 * 2 ** (reconnectAttempts.current - 1), 10000);
+    setStatus("reconnecting");
+    if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+    reconnectTimer.current = setTimeout(() => connect(), delay);
+  }, []);
+
   const connect = useCallback(() => {
-    
-  })
+    if(!name.trim()) return;
+    if(wsRef.current && (wsRef.current.readystate === WebSocket.OPEN || wsRef.current.readystate === WebSocket.CONNECTING))
+    {
+      return;
+    }
+    try {
+      setStatus((s) => (s==="open" ? "open" : "connecting"));
+      const ws = new WebSocket(wsUrlWithName);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        setStatus("open");
+      };
+
+      ws.onmessage = (ev) => {
+        let msg = null;
+        try{
+          msg = JSON.parse(ev.data);
+        } catch {
+          return;
+        }
+        if(!msg || !msg.type) return;
+
+        switch(msg.type) {
+
+          case "ack": {
+            if(msg.of === "join" || (msg.payload && msg.payload.of === "join"))
+            {
+              const id = msg.id ?? msg.payload?.id;
+              const finalName = msg.name ?? msg.payload?.name ?? name;
+              if(id) setSelfId(id);
+              if(finalName)
+              {
+                setName(finalName);
+                localStorage.setItem("name", finalName);
+              }
+              setPhase("chat");
+            }
+            break;
+          }
+
+          case "users": {
+            const list = msg.users ?? msg.payload?.users ?? [];
+            setUsers(Array.isArray(list) ? list : []);
+            break;
+          }
+
+          case "system": {
+            const text = msg.text ?? msg.payload?.text ?? "";
+            const ts = msg.ts ?? msg.payload?.ts ?? Date.now();
+            const id = `sys-${ts}-${Math.random().toString(36).slice(2)}`;
+            setItems((prev) => [..prev, {kind: "system", id, text, ts}]);
+            break;
+          }
+
+          case "message": {
+            const p = msg.payload ?? msg;
+            const id = p.id ?? `m-${p.ts ?? Date.now()}-${Math.random().toString(36).slice(2)}`;
+            const from = p.from ?? {id: "?", name: "?"};
+            const text = String(p.text ?? "");
+            const ts = p.ts ?? Date.now();
+            setItems((prev) => [..prev, {kind: "user", id, from, text, ts}]);
+            break;
+          }
+          default:
+            break;
+        }
+      };
+
+      ws.onclose = () => {
+        setStatus("Closed");
+        scheduleReconnect();
+      };
+    } catch {
+      scheduleReconnect();
+    }
+  }, [name, scheduleReconnect, wsUrlWithName]);
+
+  useEffect(() => {
+    return() => {
+      if(reconnectTimer.current) clearTimeout(reconnectTimer.current);
+      if(wsRef.current) try {wsRef.current.close();} catch {}
+    };
+  }, []);
+
+  
 }
