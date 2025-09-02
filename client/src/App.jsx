@@ -112,7 +112,7 @@ export default function App()
             const text = msg.text ?? msg.payload?.text ?? "";
             const ts = msg.ts ?? msg.payload?.ts ?? Date.now();
             const id = `sys-${ts}-${Math.random().toString(36).slice(2)}`;
-            setItems((prev) => [..prev, {kind: "system", id, text, ts}]);
+            setItems((prev) => [...prev, {kind: "system", id, text, ts}]);
             break;
           }
 
@@ -122,7 +122,7 @@ export default function App()
             const from = p.from ?? {id: "?", name: "?"};
             const text = String(p.text ?? "");
             const ts = p.ts ?? Date.now();
-            setItems((prev) => [..prev, {kind: "user", id, from, text, ts}]);
+            setItems((prev) => [ ... prev, {kind: "user", id, from, text, ts}]);
             break;
           }
           default:
@@ -146,5 +146,127 @@ export default function App()
     };
   }, []);
 
-  
+  const handleJoin = () => {
+    const chosen = (usernameInp || "").trim() || randName();
+    setName(chosen);
+    localStorage.setItem("name", chosen);
+    connect();
+    setPhase("chat");
+  }
+
+  const sendMessage = () => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState != WebSocket.OPEN) return;
+    const text = draft.trim();
+    if(!text) return;
+    ws.send(text);
+    setDraft("");
+  }
+
+  const onlineCount = users.length;
+  const connected = status === 'open';
+
+  return(
+    <div className="app">
+      <header className="header">
+        <div className="brand">WS Chat</div>
+        <div className="header-right">
+          {phase === "chat" && <span className="badge">{onlineCount} online</span>}
+          <ConnPill state={status} />
+        </div>
+      </header>
+
+      {phase === "join" ? (
+        <section className="join">
+          <h2>Choose a username</h2>
+          <input
+            className="input"
+            placeholder="e.g., Alice (leave blank for random)"
+            maxLength={24}
+            value={usernameInput}
+            onChange={(e) => setUsernameInput(e.target.value)}
+          />
+          <button className="btn" onClick={handleJoin}>Join Chat</button>
+          <p className="hint">Server URL: <code>{WS_URL}</code></p>
+        </section>
+      ) : (
+        <section className="layout">
+          <aside className="sidebar">
+            <h3>People</h3>
+            <ul className="people">
+              {users.map((u) => (
+                <li key={u.id}>
+                  <span className={u.id === selfId ? "me" : ""}>
+                    {u.name}{u.id === selfId ? " (you)" : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </aside>
+
+          <main className="main">
+            <div className="messages" ref={listRef} onScroll={onScroll} aria-live="polite">
+              {items.map((m) =>
+                m.kind === "system" ? (
+                  <div key={m.id} className="system">
+                    <span>{m.text}</span>
+                    <time className="time">{fmtTime(m.ts)}</time>
+                  </div>
+                ) : (
+                  <div
+                    key={m.id}
+                    className={`bubble ${m.from.id === selfId ? "self" : "other"}`}
+                    title={fmtTime(m.ts)}
+                  >
+                    <div className="bubble-head">
+                      <strong>{m.from.id === selfId ? "You" : m.from.name}</strong>
+                      <time className="time">{fmtTime(m.ts)}</time>
+                    </div>
+                    <div>{m.text}</div>
+                  </div>
+                )
+              )}
+            </div>
+
+            <div className="composer">
+              <textarea
+                className="textarea"
+                placeholder={connected ? "Type a message…" : "Reconnecting…"}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                  }
+                }}
+                disabled={!connected}
+                maxLength={1000}
+              />
+              <button className="send" onClick={sendMessage} disabled={!connected || !draft.trim()}>
+                Send
+              </button>
+            </div>
+          </main>
+        </section>
+      )}
+    </div>
+  );
+}
+
+function ConnPill({state})
+{
+  const label = 
+  state === "open" ? "Connected" :
+  state === "connecting" ? "Connecting" :
+  state === "reconnecting" ? "Reconnecting" :
+  state === "Closed" ? "Offline" : "Idle";
+
+  const cls =
+    state === "open" ? "pill green" :
+    state === "connecting" ? "pill amber" :
+    state === "reconnecting" ? "pill red" :
+    "pill gray";
+
+  return <span className={cls} aria-live="polite">{label}</span>;
 }

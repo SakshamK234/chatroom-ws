@@ -45,7 +45,7 @@ let currId = 1; //generates custom IDs
 server.on("connection", (ws) => {
     ws.id = String(currId);
     currId++;
-    ws.joined = false;
+    ws.joined = true;
     ws.name = randName();
 
     broadcast({type: "system", text: `${ws.name} has joined`});
