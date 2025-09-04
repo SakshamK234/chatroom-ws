@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import React, {useEffect, useMemo, useRef, useState, useCallback} from "react";
 
-const WS_URL = "ws://localhost:3000";
+const WS_URL =  "ws://localhost:3000";
 
-function randName() {
+function randName()
+{
   const choices = ["Leo", "Oscar", "Josie", "Max"];
   const tag = Math.random().toString(36).slice(2, 6).toUpperCase();
   const pick = choices[Math.floor(Math.random() * choices.length)];
@@ -10,46 +11,41 @@ function randName() {
 }
 
 const fmtTime = (ts) =>
-  new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(ts);
+  new Intl.DateTimeFormat(undefined, {hour: "2-digit", minute: "2-digit"}).format(ts);
 
-export default function App() {
+export default function App()
+{
   const [phase, setPhase] = useState("join");
 
-  // keep names consistent: "usernameInput" / "setUsernameInput"
-  const [usernameInput, setUsernameInput] = useState(() => localStorage.getItem("name") || "");
+  const [usernameInp, setUsernameInp] = useState(() => localStorage.getItem("name") || "");
   const [name, setName] = useState("");
   const [selfId, setSelfId] = useState(null);
 
-  // socket state
-  const [status, setStatus] = useState("idle"); // 'idle' | 'connecting' | 'open' | 'reconnecting' | 'closed'
-  const wsRef = useRef(null);
-  const reconnectTimer = useRef(null);
-  const reconnectAttempts = useRef(0);
+  const [status, setStatus] = useState("idle");
+  const wsRef = useState(null);
 
-  // data
   const [users, setUsers] = useState([]);
   const [items, setItems] = useState([]);
-  const [draft, setDraft] = useState("");
+  const[draft, setDraft] = useState("");
 
-  // auto-scroll
   const listRef = useRef(null);
   const nearBottomRef = useRef(true);
   useEffect(() => {
     const el = listRef.current;
-    if (!el) return;
+    if(!el) return;
     const nearBottom = el.scrollHeight - el.clientHeight - el.scrollTop < 24;
-    if (nearBottom || nearBottomRef.current) {
+    if (nearBottom || nearBottomRef.current)
+    {
       el.scrollTop = el.scrollHeight;
     }
   }, [items]);
 
   const onScroll = () => {
     const el = listRef.current;
-    if (!el) return;
+    if(!el) return;
     nearBottomRef.current = el.scrollHeight - el.clientHeight - el.scrollTop < 24;
   };
 
-  // build ws url with ?name=
   const wsUrlWithName = useMemo(() => {
     const n = encodeURIComponent(name || "");
     const sep = WS_URL.includes("?") ? "&" : "?";
@@ -65,16 +61,13 @@ export default function App() {
   }, []);
 
   const connect = useCallback(() => {
-    if (!name.trim()) return;
-    if (
-      wsRef.current &&
-      (wsRef.current.readyState === WebSocket.OPEN ||
-        wsRef.current.readyState === WebSocket.CONNECTING)
-    ) {
+    if(!name.trim()) return;
+    if(wsRef.current && (wsRef.current.readystate === WebSocket.OPEN || wsRef.current.readystate === WebSocket.CONNECTING))
+    {
       return;
     }
     try {
-      setStatus((s) => (s === "open" ? "open" : "connecting"));
+      setStatus((s) => (s==="open" ? "open" : "connecting"));
       const ws = new WebSocket(wsUrlWithName);
       wsRef.current = ws;
 
@@ -84,21 +77,23 @@ export default function App() {
 
       ws.onmessage = (ev) => {
         let msg = null;
-        try {
+        try{
           msg = JSON.parse(ev.data);
         } catch {
           return;
         }
-        if (!msg || !msg.type) return;
+        if(!msg || !msg.type) return;
 
-        switch (msg.type) {
+        switch(msg.type) {
+
           case "ack": {
-            const of = msg.of ?? msg.payload?.of;
-            if (of === "join") {
+            if(msg.of === "join" || (msg.payload && msg.payload.of === "join"))
+            {
               const id = msg.id ?? msg.payload?.id;
               const finalName = msg.name ?? msg.payload?.name ?? name;
-              if (id) setSelfId(id);
-              if (finalName) {
+              if(id) setSelfId(id);
+              if(finalName)
+              {
                 setName(finalName);
                 localStorage.setItem("name", finalName);
               }
@@ -106,25 +101,28 @@ export default function App() {
             }
             break;
           }
+
           case "users": {
             const list = msg.users ?? msg.payload?.users ?? [];
             setUsers(Array.isArray(list) ? list : []);
             break;
           }
+
           case "system": {
             const text = msg.text ?? msg.payload?.text ?? "";
             const ts = msg.ts ?? msg.payload?.ts ?? Date.now();
             const id = `sys-${ts}-${Math.random().toString(36).slice(2)}`;
-            setItems((prev) => [...prev, { kind: "system", id, text, ts }]);
+            setItems((prev) => [...prev, {kind: "system", id, text, ts}]);
             break;
           }
+
           case "message": {
             const p = msg.payload ?? msg;
             const id = p.id ?? `m-${p.ts ?? Date.now()}-${Math.random().toString(36).slice(2)}`;
-            const from = p.from ?? { id: "?", name: "?" };
+            const from = p.from ?? {id: "?", name: "?"};
             const text = String(p.text ?? "");
             const ts = p.ts ?? Date.now();
-            setItems((prev) => [...prev, { kind: "user", id, from, text, ts }]);
+            setItems((prev) => [ ... prev, {kind: "user", id, from, text, ts}]);
             break;
           }
           default:
@@ -133,7 +131,7 @@ export default function App() {
       };
 
       ws.onclose = () => {
-        setStatus("closed");
+        setStatus("Closed");
         scheduleReconnect();
       };
     } catch {
@@ -141,41 +139,34 @@ export default function App() {
     }
   }, [name, scheduleReconnect, wsUrlWithName]);
 
-  // cleanup
   useEffect(() => {
-    return () => {
-      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
-      if (wsRef.current) {
-        try {
-          wsRef.current.close();
-        } catch {}
-      }
+    return() => {
+      if(reconnectTimer.current) clearTimeout(reconnectTimer.current);
+      if(wsRef.current) try {wsRef.current.close();} catch {}
     };
   }, []);
 
-  // join click
   const handleJoin = () => {
-    const chosen = (usernameInput || "").trim() || randName();
+    const chosen = (usernameInp || "").trim() || randName();
     setName(chosen);
     localStorage.setItem("name", chosen);
     connect();
     setPhase("chat");
-  };
+  }
 
-  // send plain text
   const sendMessage = () => {
     const ws = wsRef.current;
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    if (!ws || ws.readyState != WebSocket.OPEN) return;
     const text = draft.trim();
-    if (!text) return;
+    if(!text) return;
     ws.send(text);
     setDraft("");
-  };
+  }
 
   const onlineCount = users.length;
-  const connected = status === "open";
+  const connected = status === 'open';
 
-  return (
+  return(
     <div className="app">
       <header className="header">
         <div className="brand">WS Chat</div>
@@ -206,8 +197,7 @@ export default function App() {
               {users.map((u) => (
                 <li key={u.id}>
                   <span className={u.id === selfId ? "me" : ""}>
-                    {u.name}
-                    {u.id === selfId ? " (you)" : ""}
+                    {u.name}{u.id === selfId ? " (you)" : ""}
                   </span>
                 </li>
               ))}
@@ -264,12 +254,13 @@ export default function App() {
   );
 }
 
-function ConnPill({ state }) {
-  const label =
-    state === "open" ? "Connected" :
-    state === "connecting" ? "Connecting…" :
-    state === "reconnecting" ? "Reconnecting…" :
-    state === "closed" ? "Offline" : "Idle";
+function ConnPill({state})
+{
+  const label = 
+  state === "open" ? "Connected" :
+  state === "connecting" ? "Connecting" :
+  state === "reconnecting" ? "Reconnecting" :
+  state === "Closed" ? "Offline" : "Idle";
 
   const cls =
     state === "open" ? "pill green" :
