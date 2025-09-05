@@ -1,28 +1,11 @@
+// One-room WebSocket chat — plain text messages, optional /name rename
 const { WebSocketServer, WebSocket } = require("ws");
-const server = new WebSocketServer({ port: 3000 });
+const http = require("http");
+const url = require("url");
 
-// broadcasts messages to every user
-function broadcast(obj) {
-  const data = JSON.stringify(obj);
-  for (const client of server.clients) {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(data);
-    }
-  }
-}
+const PORT = process.env.PORT || 3000;
+const wss = new WebSocketServer({ noServer: true });
 
-// return the list of current users who have already joined
-function userList() {
-  const ulist = [];
-  for (const client of server.clients) {
-    if (client.readyState === WebSocket.OPEN && client.joined) {
-      ulist.push({ id: client.id, name: client.name });
-    }
-  }
-  return ulist;
-}
-
-// random name
 function randName() {
   const choices = ["Leo", "Oscar", "Josie", "Max"];
   const pick = choices[Math.floor(Math.random() * choices.length)];
@@ -30,53 +13,101 @@ function randName() {
   return `${pick}-${tag}`;
 }
 
-let currId = 1;
+// ---- helpers
+function broadcast(obj) {
+  const data = JSON.stringify(obj);
+  for (const client of wss.clients) {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(data);
+    }
+  }
+}
 
-server.on("connection", (ws) => {
-  ws.id = String(currId++);
-  ws.joined = true;             // you’re auto-joining everyone
-  ws.name = randName();
+function userList() {
+  const list = [];
+  for (const client of wss.clients) {
+    if (client.readyState === WebSocket.OPEN && client.joined) {
+      list.push({ id: client.id, name: client.name });
+    }
+  }
+  return list;
+}
 
-  // tell THIS client their id & final name (helps the frontend set 'You')
-  ws.send(JSON.stringify({ type: "ack", of: "join", id: ws.id, name: ws.name }));
+// ---- connection
+let nextId = 1;
 
-  // announce to room + update roster
-  broadcast({ type: "system", text: `${ws.name} has joined` });
+wss.on("connection", (ws, req) => {
+  ws.id = String(nextId++);
+  ws.joined = false;
+
+  // Pick up ?name=... if provided, else random
+  let requested = "";
+  try {
+    const { query } = url.parse(req.url, true);
+    requested = (query.name || "").toString().trim();
+  } catch {}
+
+  ws.name = (requested || randName()).slice(0, 24);
+  ws.joined = true;
+
+  // Tell THIS client their id/name; UI uses this to set “You”
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: "ack", of: "join", id: ws.id, name: ws.name }));
+  }
+
+  // Announce + roster
+  broadcast({ type: "system", text: `${ws.name} has joined`, ts: Date.now() });
   broadcast({ type: "users", users: userList() });
 
-  ws.on("message", (data) => {
-    const text = data.toString();
+  ws.on("message", (raw, isBinary) => {
+    if (isBinary) return;
+    const text = raw.toString().trim();
+    if (!text) return;
 
-    // rename command
+    // Rename command
     if (text.startsWith("/name ")) {
-      const newName = text.slice(6).trim();
+      const newName = text.slice(6).trim().slice(0, 24);
       if (newName) {
         const old = ws.name;
         ws.name = newName;
-        broadcast({ type: "system", text: `${old} is now ${ws.name}` });
+        broadcast({ type: "system", text: `${old} is now ${ws.name}`, ts: Date.now() });
         broadcast({ type: "users", users: userList() });
       }
       return;
     }
 
-    // regular chat
-    const msg = text.trim();
-    if (!msg) return;
-
+    // Normal chat
     broadcast({
       type: "message",
       from: { id: ws.id, name: ws.name },
-      text: msg,
+      text,
       ts: Date.now(),
     });
   });
 
   ws.on("close", () => {
     if (ws.joined) {
-      broadcast({ type: "system", text: `${ws.name} has left` });
+      broadcast({ type: "system", text: `${ws.name} has left`, ts: Date.now() });
       broadcast({ type: "users", users: userList() });
     }
   });
 });
 
-console.log("Server is running on ws://localhost:3000");
+// Optional tiny HTTP server so the WS can upgrade cleanly (and a health check)
+const server = http.createServer((req, res) => {
+  if (req.url === "/healthz") {
+    res.writeHead(200, { "content-type": "text/plain" });
+    res.end("ok");
+    return;
+  }
+  res.writeHead(404);
+  res.end();
+});
+
+server.on("upgrade", (req, socket, head) => {
+  wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
+});
+
+server.listen(PORT, () => {
+  console.log(`WS chat listening on ws://localhost:${PORT}  (health: http://localhost:${PORT}/healthz)`);
+});
