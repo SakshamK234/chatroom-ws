@@ -5,6 +5,7 @@ const url = require("url");
 const PORT = process.env.PORT || 3000;
 const wss = new WebSocketServer({ noServer: true });
 
+//My dog and 3 of his friends along with a random tag generator to prevent duplicates
 function randName() {
   const choices = ["Leo", "Oscar", "Josie", "Max"];
   const pick = choices[Math.floor(Math.random() * choices.length)];
@@ -12,6 +13,7 @@ function randName() {
   return `${pick}-${tag}`;
 }
 
+//broadcast for all messages
 function broadcast(obj) {
   const data = JSON.stringify(obj);
   for (const client of wss.clients) {
@@ -21,6 +23,7 @@ function broadcast(obj) {
   }
 }
 
+//scrollable user list
 function userList() {
   const list = [];
   for (const client of wss.clients) {
@@ -33,6 +36,7 @@ function userList() {
 
 let nextId = 1;
 
+//primary backend functionality
 wss.on("connection", (ws, req) => {
   ws.id = String(nextId++);
   ws.joined = false;

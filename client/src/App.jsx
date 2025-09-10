@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from "react"
 
 const WS_URL = import.meta.env.VITE_WS_URL || "ws://localhost:3000";
 
+//Random name function similar to the backend
 function randName() {
   const choices = ["Leo", "Oscar", "Josie", "Max"];
   const tag = Math.random().toString(36).slice(2, 6).toUpperCase();
@@ -9,9 +10,12 @@ function randName() {
   return `${pick}-${tag}`;
 }
 
+//Time function for accurate timestamps
 const fmtTime = (ts) =>
   new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(ts);
 
+
+//primary frontend functionality
 export default function App() {
   //Phases
   const [phase, setPhase] = useState("join"); 
