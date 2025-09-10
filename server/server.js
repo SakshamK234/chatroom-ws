@@ -1,4 +1,3 @@
-// One-room WebSocket chat — plain text messages, optional /name rename
 const { WebSocketServer, WebSocket } = require("ws");
 const http = require("http");
 const url = require("url");
@@ -13,7 +12,6 @@ function randName() {
   return `${pick}-${tag}`;
 }
 
-// ---- helpers
 function broadcast(obj) {
   const data = JSON.stringify(obj);
   for (const client of wss.clients) {
@@ -33,14 +31,12 @@ function userList() {
   return list;
 }
 
-// ---- connection
 let nextId = 1;
 
 wss.on("connection", (ws, req) => {
   ws.id = String(nextId++);
   ws.joined = false;
 
-  // Pick up ?name=... if provided, else random
   let requested = "";
   try {
     const { query } = url.parse(req.url, true);
@@ -50,12 +46,10 @@ wss.on("connection", (ws, req) => {
   ws.name = (requested || randName()).slice(0, 24);
   ws.joined = true;
 
-  // Tell THIS client their id/name; UI uses this to set “You”
   if (ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: "ack", of: "join", id: ws.id, name: ws.name }));
   }
 
-  // Announce + roster
   broadcast({ type: "system", text: `${ws.name} has joined`, ts: Date.now() });
   broadcast({ type: "users", users: userList() });
 
@@ -76,7 +70,7 @@ wss.on("connection", (ws, req) => {
       return;
     }
 
-    // Normal chat
+    //Normal chat
     broadcast({
       type: "message",
       from: { id: ws.id, name: ws.name },
@@ -93,7 +87,6 @@ wss.on("connection", (ws, req) => {
   });
 });
 
-// Optional tiny HTTP server so the WS can upgrade cleanly (and a health check)
 const server = http.createServer((req, res) => {
   if (req.url === "/healthz") {
     res.writeHead(200, { "content-type": "text/plain" });

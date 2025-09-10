@@ -13,27 +13,27 @@ const fmtTime = (ts) =>
   new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(ts);
 
 export default function App() {
-  // Phases
-  const [phase, setPhase] = useState("join"); // 'join' | 'chat'
+  //Phases
+  const [phase, setPhase] = useState("join"); 
 
-  // Identity
+  //Identity
   const [usernameInput, setUsernameInput] = useState(() => localStorage.getItem("name") || "");
   const [name, setName] = useState("");
-  const nameRef = useRef(""); // latest name for reconnects
+  const nameRef = useRef("");
   const [selfId, setSelfId] = useState(null);
 
-  // Socket state
-  const [status, setStatus] = useState("idle"); // 'idle' | 'connecting' | 'open' | 'reconnecting' | 'closed'
+  //Socket state
+  const [status, setStatus] = useState("idle"); 
   const wsRef = useRef(null);
   const reconnectTimer = useRef(null);
   const reconnectAttempts = useRef(0);
 
-  // Data
-  const [users, setUsers] = useState([]);   // [{id, name}]
-  const [items, setItems] = useState([]);   // feed: system + user messages
+  //Data
+  const [users, setUsers] = useState([]);
+  const [items, setItems] = useState([]);
   const [draft, setDraft] = useState("");
 
-  // Auto-scroll
+  //Auto-scroll
   const listRef = useRef(null);
   const nearBottomRef = useRef(true);
   useEffect(() => {
@@ -50,7 +50,7 @@ export default function App() {
     nearBottomRef.current = el.scrollHeight - el.clientHeight - el.scrollTop < 24;
   };
 
-  // Build WS URL with ?name=
+  
   const buildWsUrl = useCallback((n) => {
     const enc = encodeURIComponent(n || "");
     const sep = WS_URL.includes("?") ? "&" : "?";
@@ -69,7 +69,7 @@ export default function App() {
     const finalName = (n || "").trim();
     if (!finalName) return;
 
-    // Avoid duplicate sockets
+    //Avoid duplicate sockets
     if (
       wsRef.current &&
       (wsRef.current.readyState === WebSocket.OPEN ||
@@ -144,14 +144,13 @@ export default function App() {
       };
 
       ws.onerror = () => {
-        // handled via onclose
       };
     } catch {
       scheduleReconnect();
     }
   }, [buildWsUrl, scheduleReconnect]);
 
-  // Cleanup on unmount
+  
   useEffect(() => {
     return () => {
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
@@ -161,17 +160,17 @@ export default function App() {
     };
   }, []);
 
-  // Join click
+  //Join click
   const handleJoin = () => {
     const chosen = (usernameInput || "").trim() || randName();
     setName(chosen);
     nameRef.current = chosen;
     localStorage.setItem("name", chosen);
-    connect(chosen);            // pass the name directly (avoids stale state)
+    connect(chosen); 
     setPhase("chat");
   };
 
-  // Send a plain-text message
+  //Send a plain-text message
   const sendMessage = () => {
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
